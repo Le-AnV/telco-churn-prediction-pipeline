@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from sklearn.compose import ColumnTransformer
@@ -42,18 +41,25 @@ def fix_no_internet(df, cols):
 
 
 # Tự động tìm tất cả các cột dạng Yes/No và encode thành 0/1
-def encode_yes_no(df):
-    yes_no_cols = [c for c in df.columns if df[c].isin(["Yes", "No"]).all()]
+def encode_yes_no(df, exclude=None):
+    if exclude is None:
+        exclude = []
+
+    yes_no_cols = [
+        c for c in df.columns if c not in exclude and df[c].isin(["Yes", "No"]).all()
+    ]
+
     for c in yes_no_cols:
         df[c] = df[c].map({"No": 0, "Yes": 1})
+
     return df
 
 
-# Xoá ID, xoá trùng, xoá dòng lỗi
-def final_clean(df):
-    df = df.drop(columns="customerID")
+# Xoá trùng, xoá dòng lỗi
+def final_clean(df, drop_na=True):
     df = df.drop_duplicates()
-    df = df.dropna()
+    if drop_na:
+        df = df.dropna(how="any", axis=0)
     return df
 
 
@@ -68,10 +74,20 @@ def fe_avg_monthly_spent(df):
 
 # Chia tenure thành các nhóm – mạnh trong churn
 def fe_tenure_bins(df):
+    # luôn ép về float trước khi fill
+    df["tenure"] = pd.to_numeric(df["tenure"], errors="coerce")
+    df["tenure"] = df["tenure"].fillna(0).astype(float)
+
+    # ép lại để không có giá trị âm
+    df["tenure"] = df["tenure"].clip(lower=0)
+
+    bins = [0, 6, 12, 24, 48, 1000]
+
     df["tenure_bin"] = pd.cut(
         df["tenure"],
-        bins=[0, 6, 12, 24, 48, df["tenure"].max()],
+        bins=bins,
         labels=["0-6m", "6-12m", "1-2y", "2-4y", "4+y"],
+        include_lowest=True,
     )
     return df
 
@@ -92,7 +108,17 @@ def fe_interactions(df):
 
 
 # Toàn bộ quy trình clean + encode + FE cho Telco dataset
-def clean_telco_data(df, internet_service_cols):
+def clean_telco_data(df, clean_label=False, drop_id=True):
+
+    # Danh sách các dịch vụ
+    internet_service_cols = [
+        "OnlineSecurity",
+        "OnlineBackup",
+        "DeviceProtection",
+        "TechSupport",
+        "StreamingTV",
+        "StreamingMovies",
+    ]
 
     # --- BASIC CLEAN ---
     df = clean_monthly_total_charges(df)
@@ -100,15 +126,22 @@ def clean_telco_data(df, internet_service_cols):
     df = fix_no_internet(df, internet_service_cols)
 
     # --- ENCODE ---
-    df = encode_binary_map(df, "Churn", {"No": 0, "Yes": 1})
     df = encode_binary_map(df, "gender", {"Male": 0, "Female": 1})
-    df = encode_yes_no(df)
+    df = encode_yes_no(df, exclude=["Churn"])
 
     # --- FEATURE ENGINEERING ---
     df = fe_avg_monthly_spent(df)
     df = fe_tenure_bins(df)
     df = fe_num_services(df, internet_service_cols)
     df = fe_interactions(df)
+
+    # --- LABEL (chỉ dùng cho training) ---
+    if clean_label:
+        df = encode_binary_map(df, "Churn", {"Yes": 1, "No": 0})
+
+    # --- DROP ID (optional) ---
+    if drop_id and "customerID" in df.columns:
+        df = df.drop(columns=["customerID"])
 
     # --- FINAL CLEAN ---
     df = final_clean(df)
