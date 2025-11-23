@@ -69,7 +69,7 @@ def train_all_models(preprocessor, X_train, y_train, X_test, y_test):
 # ===================== PRINT RESULT TABLE =====================
 
 
-# In kết quả theo format đẹp
+# In kết quả theo format
 def print_result_table(results):
 
     print(f"{'Model':<18} {'Acc':<10} {'Prec':<10} {'Recall':<10} {'F1':<10}")
