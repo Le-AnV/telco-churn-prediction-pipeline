@@ -45,6 +45,7 @@ def encode_yes_no(df, exclude=None):
     if exclude is None:
         exclude = []
 
+    # Danh sách các cột cần mã hoá | Chỉ chứa category ["Yes", "No"]
     yes_no_cols = [
         c for c in df.columns if c not in exclude and df[c].isin(["Yes", "No"]).all()
     ]
@@ -98,7 +99,7 @@ def fe_num_services(df, service_cols):
     return df
 
 
-# Các biến tương tác → giúp model học mạnh hơn
+# Mức chi mỗi tháng của khách so với tổng số tiền họ đã chi trước đó
 def fe_interactions(df):
     df["spending_intensity"] = df["MonthlyCharges"] / (df["TotalCharges"] + 1)
     return df
@@ -127,11 +128,11 @@ def clean_telco_data(df, clean_label=False, drop_id=True):
 
     # --- ENCODE ---
     df = encode_binary_map(df, "gender", {"Male": 0, "Female": 1})
-    df = encode_yes_no(df, exclude=["Churn"])
+    df = encode_yes_no(df, exclude=["Churn"])  # Không bao gồm label, xử lý riêng
 
     # --- FEATURE ENGINEERING ---
-    df = fe_avg_monthly_spent(df)
     df = fe_tenure_bins(df)
+    df = fe_avg_monthly_spent(df)
     df = fe_num_services(df, internet_service_cols)
     df = fe_interactions(df)
 
@@ -183,7 +184,7 @@ def create_preprocessor():
                 categorical_features_ordinal,
             ),
         ],
-        remainder="passthrough",
+        remainder="passthrough",  # Giữ lại các đặc trưng khác
     )
 
     return preprocessor
